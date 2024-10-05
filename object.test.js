@@ -33,12 +33,20 @@ function capture(msg, checks) {
 
 let variant = process.argv.filter(x => x.startsWith('--variant='))[0]
 variant = variant ? variant : "easy";
+variant = variant.substr(10);
+console.log(`Executing variant ${variant}`);
 
-function testExpression(actualStr, evaluate, repr, expectedDiff) {
+function testExpression(actualStr, evaluate, repr, expectedDiff, name) {
     const actual = eval(actualStr);
+    capture(`(${actualStr}).constructor is wrong class`, () => {
+        expect(actual.constructor).toBe(name);
+    });
+    capture(`Object.getPrototypeOf(${actualStr}) is not equal to class' protorype property`, () => {
+        expect(Object.getPrototypeOf(actual)).toBe(name.prototype);
+    })
     capture(`Testing evaluate of ${actualStr}`, () => {
         for (const x of numbers) {
-           for (const y of numbers) {
+            for (const y of numbers) {
                 for (const z of numbers) {
                     capture(`At point [${x}, ${y}, ${z}]`, () => expect(actual.evaluate(x, y, z)).toBe(evaluate(x, y, z)));
                 }
@@ -48,6 +56,7 @@ function testExpression(actualStr, evaluate, repr, expectedDiff) {
     capture(`Testing prefix of ${actualStr}`, () => {
         expect(actual.prefix()).toBe(repr);
     });
+    
 
     if (variant === 'hard') {
         for (const v of variables) {
@@ -70,28 +79,28 @@ function testExpression(actualStr, evaluate, repr, expectedDiff) {
 
 test('constants', () => {
     for (let i = 0; i < numbers.length; i++) {
-        testExpression(`new Const(${numbersStr[i]})`, (x, y, z) => numbers[i], numbers[i].toString(), v => (x, y, z) => 0);
+        testExpression(`new Const(${numbersStr[i]})`, (x, y, z) => numbers[i], numbers[i].toString(), v => (x, y, z) => 0, Const);
     }
 });
 
 test('variables', () => {
-    testExpression("new Variable('x')", (x, y, z) => x, 'x', v => v === 'x' ? (x, y, z) => 1 : (x, y, z) => 0);
+    testExpression("new Variable('x')", (x, y, z) => x, 'x', v => v === 'x' ? (x, y, z) => 1 : (x, y, z) => 0, Variable);
 
-    testExpression("new Variable('y')", (x, y, z) => y, 'y', v => v === 'y' ? (x, y, z) => 1 : (x, y, z) => 0);
+    testExpression("new Variable('y')", (x, y, z) => y, 'y', v => v === 'y' ? (x, y, z) => 1 : (x, y, z) => 0, Variable);
 
-    testExpression("new Variable('z')", (x, y, z) => z, 'z', v => v === 'z' ? (x, y, z) => 1 : (x, y, z) => 0);
+    testExpression("new Variable('z')", (x, y, z) => z, 'z', v => v === 'z' ? (x, y, z) => 1 : (x, y, z) => 0, Variable);
 });
 
 test('simple', () => {
-    testExpression("new Add(new Const(3), new Variable('y'))", (x, y, z) => 3 + y, "(+ 3 y)", v => v === 'y' ? (x, y, z) => 1 : (x, y, z) => 0);
+    testExpression("new Add(new Const(3), new Variable('y'))", (x, y, z) => 3 + y, "(+ 3 y)", v => v === 'y' ? (x, y, z) => 1 : (x, y, z) => 0, Add);
 
-    testExpression("new Subtract(new Const(Number.MAX_SAFE_INTEGER), new Variable('z'))", (x, y, z) => Number.MAX_SAFE_INTEGER - z, `(- ${Number.MAX_SAFE_INTEGER} z)`, v => v === 'z' ? (x, y, z) => -1 : (x, y, z) => 0);
+    testExpression("new Subtract(new Const(Number.MAX_SAFE_INTEGER), new Variable('z'))", (x, y, z) => Number.MAX_SAFE_INTEGER - z, `(- ${Number.MAX_SAFE_INTEGER} z)`, v => v === 'z' ? (x, y, z) => -1 : (x, y, z) => 0, Subtract);
 
-    testExpression("new Multiply(new Variable('x'), new Variable('z'))", (x, y, z) => x * z, "(* x z)", v => v === 'x' ? (x, y, z) => z : v === 'y' ? (x, y, z) => 0 : (x, y, z) => x);
+    testExpression("new Multiply(new Variable('x'), new Variable('z'))", (x, y, z) => x * z, "(* x z)", v => v === 'x' ? (x, y, z) => z : v === 'y' ? (x, y, z) => 0 : (x, y, z) => x, Multiply);
 
-    testExpression("new Divide(new Variable('z'), new Variable('y'))", (x, y, z) => z / y, "(/ z y)", v => v === 'x' ? (x, y, z) => 0 : v === 'y' ? (x, y, z) => -z / (y * y) : (x, y, z) => 1 / y);
+    testExpression("new Divide(new Variable('z'), new Variable('y'))", (x, y, z) => z / y, "(/ z y)", v => v === 'x' ? (x, y, z) => 0 : v === 'y' ? (x, y, z) => -z / (y * y) : (x, y, z) => 1 / y, Divide);
 
-    testExpression("new Negate(new Variable('x'))", (x, y, z) => -x, "(negate x)", v => v === 'x' ? (x, y, z) => -1 : (x, y, z) => 0);
+    testExpression("new Negate(new Variable('x'))", (x, y, z) => -x, "(negate x)", v => v === 'x' ? (x, y, z) => -1 : (x, y, z) => 0, Negate);
 });
 
 const operations = [["Add",      ["+"], "+",      2, "`(${args[0].d} + ${args[1].d})`"],
@@ -99,7 +108,7 @@ const operations = [["Add",      ["+"], "+",      2, "`(${args[0].d} + ${args[1]
                     ["Multiply", ["*"], "*",      2, "`(${args[0].d} * ${args[1].e} + ${args[1].d} * ${args[0].e})`"],
                     ["Divide",   ["/"], "/",      2, "`((${args[0].d} * ${args[1].e} - ${args[1].d} * ${args[0].e}) / (${args[1].e} * ${args[1].e}))`"],
                     ["Negate",   ["-"], "negate", 1, "`(-${args[0].d})`"]];
-const fmts = ["%s", "(%s%%s)", "(%%s %s %%s)"];
+const fmts = ["(%s)", "(%s%%s)", "(%%s %s %%s)"];
 
 function generateRandomTest(depth) {
     const r = depth > 0 ? Math.floor(rng() * operations.length) : Math.floor(rng() * 2) + operations.length;
@@ -113,14 +122,15 @@ function generateRandomTest(depth) {
     const {0 : oper, 1 : chrs, 2 : name, 3 : acnt, 4 : dfmt} = operations[r];
     const fmt = util.format(fmts[acnt], ...chrs);
     const args = Array.from({length : acnt}, () => generateRandomTest(depth - 1));
-    return {a : `new ${oper}(${args.map(t => t.a)})`, e : util.format(fmt, ...args.map(t => t.e)), s : `(${name} ${args.map(t => t.s).toString().replaceAll(',', ' ')})`, d : eval(dfmt)};
+    const d = variant === 'hard' ? eval(dfmt) : undefined;
+    return {c : oper, a : `new ${oper}(${args.map(t => t.a)})`, e : util.format(fmt, ...args.map(t => t.e)), s : `(${name} ${args.map(t => t.s).toString().replaceAll(',', ' ')})`, d : d};
 }
 
 function randomTest(depth, count) {
     test("random with depth " + depth, () => {
         for (let i = 0; i < count; i++) {
-            const {a : actual, e : expected, s : repr, d : diff} = generateRandomTest(depth)
-            testExpression(actual, eval("(x, y, z) => " + expected), repr, eval(`name => (x, y, z) => ${diff}`));
+            const {a : actual, e : expected, s : repr, d : diff, c : name} = generateRandomTest(depth)
+            testExpression(actual, eval("(x, y, z) => " + expected), repr, eval(`name => (x, y, z) => ${diff}`), eval(name));
         }
     })
 }
