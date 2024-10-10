@@ -19,4 +19,28 @@ console.log(expr.prefix());          // (- (* 2 x) 3)
     - Применение инкапсуляции.
     - Выделение общего кода для операций.
     - Минимизацию необходимой памяти.
-4. Модификация будет потом.
+4. Модификация:
+    - Теперь `Add` и `Multiply` могут поддерживать любое количество аргументов больше либо равное одного.
+    - Поддержите новые операции:
+        - `Sin`, `Cos` — имеют ровно один аргумент и возвращают соотвественно синус и косинус.
+        - `Pi` — имеет ноль аргументов и возвращает константу π.
+        - `RMS` — имеет произвольное количество аргументов и возвращает квадратный корень из среднего арифметического квадратов своих аргументов.
+    - Добавьте метод `infix()`, который будет выдавать полноскобочное арифметическое выражение в инфиксной записи. Примеры:
+```js
+console.log(
+    (
+        new Add(
+            new Variable('x'),
+            new Variable('y'),
+            new Variable('z')
+        )
+    ).infix()
+); // (x + y + z)
+console.log((new Add(new Const(15))).infix()); // (15)
+console.log((new Negate(new Variable('y'))).infix()); // -(y)
+console.log((new Pi()).infix()); // pi
+console.log((new Pi()).prefix()); // (PI)
+console.log((new Sin(new Pi())).infix()); // sin(pi)
+console.log((new Sin(new Pi())).prefix()); // (sin (PI))
+console.log((new RMS(new Variable('x'), new Variable('y'), new Variable('z'))).infix()); // rms(x, y, z)
+```
