@@ -1,7 +1,7 @@
 "use strict";
 
 const util = require('node:util');
-const {Const, Variable, Add, Subtract, Multiply, Divide, Negate} = require('./object');
+const {Const, Variable, Add, Subtract, Multiply, Divide, Negate, RMS, Sin, Cos, Pi} = require('./object');
 
 const sfc32 = require("./random-sfc32");
 const rng = sfc32(0xB16B00B5, 0xCAFEBABE, 0xDEADBEEF, 0xF0CACC1A);
@@ -32,16 +32,15 @@ function capture(msg, checks) {
 
 
 let variant = process.argv.filter(x => x.startsWith('--variant='))[0]
-variant = variant ? variant : "easy";
-variant = variant.substr(10);
+variant = variant ? variant.substr(10) : "base";
 console.log(`Executing variant ${variant}`);
 
-function testExpression(actualStr, evaluate, repr, expectedDiff, name) {
+function testExpression(actualStr, evaluate, repr, name, inf) {
     const actual = eval(actualStr);
     capture(`(${actualStr}).constructor is wrong class`, () => {
         expect(actual.constructor).toBe(name);
     });
-    capture(`Object.getPrototypeOf(${actualStr}) is not equal to class' protorype property`, () => {
+    capture(`Object.getPrototypeOf(${actualStr}) is not equal to class' prototype property`, () => {
         expect(Object.getPrototypeOf(actual)).toBe(name.prototype);
     })
     capture(`Testing evaluate of ${actualStr}`, () => {
@@ -56,81 +55,95 @@ function testExpression(actualStr, evaluate, repr, expectedDiff, name) {
     capture(`Testing prefix of ${actualStr}`, () => {
         expect(actual.prefix()).toBe(repr);
     });
-    
 
-    if (variant === 'hard') {
-        for (const v of variables) {
-            capture(`Testing diff of ${actualStr} with respect to "${v}"`, () => {
-                const actualDiff = actual.diff(v);
-                const diffEval = expectedDiff(v);
-                capture(`Diff recieved is ${actualDiff.toString()}`, () => {
-                    for (const x of numbers) {
-                        for (const y of numbers) {
-                            for (const z of numbers) {
-                                capture(`At point [${x}, ${y}, ${z}]`, () => expect(actualDiff.evaluate(x, y, z)).toBe(diffEval(x, y, z)));
-                            }
-                        }
-                    }
-                });
-            });
-        }
+    if (variant == "mod") {
+        expect(actual.infix()).toBe(inf);
     }
 }
 
 test('constants', () => {
     for (let i = 0; i < numbers.length; i++) {
-        testExpression(`new Const(${numbersStr[i]})`, (x, y, z) => numbers[i], numbers[i].toString(), v => (x, y, z) => 0, Const);
+        testExpression(`new Const(${numbersStr[i]})`, (x, y, z) => numbers[i], numbers[i].toString(), Const, numbers[i].toString());
     }
 });
 
 test('variables', () => {
-    testExpression("new Variable('x')", (x, y, z) => x, 'x', v => v === 'x' ? (x, y, z) => 1 : (x, y, z) => 0, Variable);
+    testExpression("new Variable('x')", (x, y, z) => x, 'x', Variable, 'x');
 
-    testExpression("new Variable('y')", (x, y, z) => y, 'y', v => v === 'y' ? (x, y, z) => 1 : (x, y, z) => 0, Variable);
+    testExpression("new Variable('y')", (x, y, z) => y, 'y', Variable, 'y');
 
-    testExpression("new Variable('z')", (x, y, z) => z, 'z', v => v === 'z' ? (x, y, z) => 1 : (x, y, z) => 0, Variable);
+    testExpression("new Variable('z')", (x, y, z) => z, 'z', Variable, 'z');
 });
 
 test('simple', () => {
-    testExpression("new Add(new Const(3), new Variable('y'))", (x, y, z) => 3 + y, "(+ 3 y)", v => v === 'y' ? (x, y, z) => 1 : (x, y, z) => 0, Add);
+    testExpression("new Add(new Const(3), new Variable('y'))", (x, y, z) => 3 + y, "(+ 3 y)", Add, "(3 + y)");
 
-    testExpression("new Subtract(new Const(Number.MAX_SAFE_INTEGER), new Variable('z'))", (x, y, z) => Number.MAX_SAFE_INTEGER - z, `(- ${Number.MAX_SAFE_INTEGER} z)`, v => v === 'z' ? (x, y, z) => -1 : (x, y, z) => 0, Subtract);
+    testExpression("new Subtract(new Const(Number.MAX_SAFE_INTEGER), new Variable('z'))", (x, y, z) => Number.MAX_SAFE_INTEGER - z, `(- ${Number.MAX_SAFE_INTEGER} z)`, Subtract, `(${Number.MAX_SAFE_INTEGER} - z)`);
 
-    testExpression("new Multiply(new Variable('x'), new Variable('z'))", (x, y, z) => x * z, "(* x z)", v => v === 'x' ? (x, y, z) => z : v === 'y' ? (x, y, z) => 0 : (x, y, z) => x, Multiply);
+    testExpression("new Multiply(new Variable('x'), new Variable('z'))", (x, y, z) => x * z, "(* x z)", Multiply, "(x * z)");
 
-    testExpression("new Divide(new Variable('z'), new Variable('y'))", (x, y, z) => z / y, "(/ z y)", v => v === 'x' ? (x, y, z) => 0 : v === 'y' ? (x, y, z) => -z / (y * y) : (x, y, z) => 1 / y, Divide);
+    testExpression("new Divide(new Variable('z'), new Variable('y'))", (x, y, z) => z / y, "(/ z y)", Divide, "(z / y)");
 
-    testExpression("new Negate(new Variable('x'))", (x, y, z) => -x, "(negate x)", v => v === 'x' ? (x, y, z) => -1 : (x, y, z) => 0, Negate);
+    testExpression("new Negate(new Variable('x'))", (x, y, z) => -x, "(negate x)", Negate, "-(x)");
 });
 
-const operations = [["Add",      ["+"], "+",      2, "`(${args[0].d} + ${args[1].d})`"],
-                    ["Subtract", ["-"], "-",      2, "`(${args[0].d} - ${args[1].d})`"],
-                    ["Multiply", ["*"], "*",      2, "`(${args[0].d} * ${args[1].e} + ${args[1].d} * ${args[0].e})`"],
-                    ["Divide",   ["/"], "/",      2, "`((${args[0].d} * ${args[1].e} - ${args[1].d} * ${args[0].e}) / (${args[1].e} * ${args[1].e}))`"],
-                    ["Negate",   ["-"], "negate", 1, "`(-${args[0].d})`"]];
-const fmts = ["(%s)", "(%s%%s)", "(%%s %s %%s)"];
+const rms = (...args) => Math.sqrt(args.map(a => a * a).reduce((a, b) => a + b, 0) / args.length)
+const pi = Math.PI;
+const cos = Math.cos;
+const sin = Math.sin;
+
+if (variant == 'mod') {
+    test('simple modification (var-args)', () => {
+        testExpression("new Multiply(new Const(5))", (x, y, z) => 5, "(* 5)", Multiply, "(5)");
+        testExpression("new Add(new Variable('y'))", (x, y, z) => y, "(+ y)", Add, "(y)");
+        testExpression("new Multiply(new Variable('z'), new Variable('z'), new Variable('y'), new Variable('x'), new Const(777))", (x, y, z) => z * z * y * x * 777, "(* z z y x 777)", Multiply, "(z * z * y * x * 777)");
+        testExpression("new Add(new Variable('y'), new Const(45), new Add(new Variable('x'), new Const(-3)), new Negate(new Variable('z')))", (x, y, z) => y + 45 + (x + -3) + -z, "(+ y 45 (+ x -3) (negate z))", Add, "(y + 45 + (x + -3) + -(z))");
+        testExpression("new Add(new Multiply(new Const(-13), new Const(0.5), new Variable('y')), new Variable('x'), new Negate(new Add(new Variable('z'))), new Const(-15))", (x, y, z) => (-13 * 0.5 * y) + x + -(z) + -15, "(+ (* -13 0.5 y) x (negate (+ z)) -15)", Add, "((-13 * 0.5 * y) + x + -((z)) + -15)")
+    });
+
+    test('simple modification (operations)', () => {
+        testExpression("new Pi()", (x, y, z) => Math.PI, "(PI)", Pi, "pi");
+        testExpression("new Cos(new Pi())", (x, y, z) => -1, "(cos (PI))", Cos, "cos(pi)");
+        testExpression("new Sin(new Divide(new Pi(), new Variable('z')))", (x, y, z) => Math.sin(Math.PI / z), "(sin (/ (PI) z))", Sin, "sin((pi / z))");
+        testExpression("new RMS(new Variable('x'), new Add(new Variable('z'), new Const(-3)), new Const(4))", (x, y, z) => rms(x, (z + -3), 4), "(rms x (+ z -3) 4)", RMS, "rms(x, (z + -3), 4)");
+    });
+}
+
+const operations = [["Add",      "+",      " + ", "",  variant === 'mod' ? -1 : 2],
+                    ["Subtract", "-",      " - ", "",  2],
+                    ["Multiply", "*",      " * ", "",  variant === 'mod' ? -1 : 2],
+                    ["Divide",   "/",      " / ", "",  2],
+                    ["Negate",   "negate", "",    "-", 1]];
+if (variant === 'mod') {
+    operations.push(['RMS', 'rms', ", ", "rms", -1]);
+    operations.push(['Sin', 'sin', "",   "sin", 1]);
+    operations.push(['Cos', 'cos', "",   "cos", 1]);
+    operations.push(['Pi', 'PI',   "",   "pi",  0]);
+}
 
 function generateRandomTest(depth) {
-    const r = depth > 0 ? Math.floor(rng() * operations.length) : Math.floor(rng() * 2) + operations.length;
+    const r = depth > 0 ? Math.floor(rng() * (operations.length + 2)) : Math.floor(rng() * 2) + operations.length;
     if (r === operations.length) {
         const c = rng() * 200001 - 100000;
-        return {a : `new Const(${c})`, e : `(${c})`, s : c, d : "0"};
+        return {a : `new Const(${c})`, e : c.toString(), s : c.toString(), c : "Const"};
     } else if (r === operations.length + 1) {
         const v = variables[Math.floor(rng() * variables.length)];
-        return {a : `new Variable('${v}')`, e : `(${v})`, s : v, d : `(name === ${v} ? 1 : 0)`};
+        return {a : `new Variable('${v}')`, e : v, s : v, c : "Variable"};
     }
-    const {0 : oper, 1 : chrs, 2 : name, 3 : acnt, 4 : dfmt} = operations[r];
-    const fmt = util.format(fmts[acnt], ...chrs);
+    const {0 : oper, 1 : name, 2 : inf, 3 : pref, 4 : acnt1} = operations[r];
+    const acnt = acnt1 !== -1 ? acnt1 : 1 + Math.floor(rng() * 6);
     const args = Array.from({length : acnt}, () => generateRandomTest(depth - 1));
-    const d = variant === 'hard' ? eval(dfmt) : undefined;
-    return {c : oper, a : `new ${oper}(${args.map(t => t.a)})`, e : util.format(fmt, ...args.map(t => t.e)), s : `(${name} ${args.map(t => t.s).toString().replaceAll(',', ' ')})`, d : d};
+    const impl = args.length === 0 ? pref : `${pref}(${args.map(t => t.e).join(inf)})`;
+    return {c : oper, a : `new ${oper}(${args.map(t => t.a)})`, e : impl, s : `(${name}${args.map(t => ' ' + t.s).join('')})`};
 }
 
 function randomTest(depth, count) {
     test("random with depth " + depth, () => {
         for (let i = 0; i < count; i++) {
-            const {a : actual, e : expected, s : repr, d : diff, c : name} = generateRandomTest(depth)
-            testExpression(actual, eval("(x, y, z) => " + expected), repr, eval(`name => (x, y, z) => ${diff}`), eval(name));
+            const {a : actual, e : expected, s : repr, c : name} = generateRandomTest(depth)
+            capture(expected, () => {
+            testExpression(actual, eval(`(x, y, z) => ${expected}`), repr, eval(name), expected);
+            });
         }
     })
 }
