@@ -44,3 +44,7 @@ console.log((new Sin(new Pi())).infix()); // sin(pi)
 console.log((new Sin(new Pi())).prefix()); // (sin (PI))
 console.log((new RMS(new Variable('x'), new Variable('y'), new Variable('z'))).infix()); // rms(x, y, z)
 ```
+
+5. Пара советов.
+    - У массивов в JS есть методы [`.map`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/map), [`.reduce`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/reduce) и [`.join`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/join), которые могут вам очень помочь в этом задании. И вообще [много других методов](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array#instance_methods), которые могут быть полезны.
+    - Будьте осторожны с `.reduce`. Такой код: `.reduce((a, b) => a + b, 0)` может вернуть не совсем сумму в массиве (если сумма там равна `-0`, то такой код вернёт `0`). Поэтому тесты не пройдут. Именно для этой цели в задании сказано, что `Add` имеет хотя бы один аргумент.
